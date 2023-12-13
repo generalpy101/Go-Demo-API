@@ -95,6 +95,9 @@ func main() {
 	router.HandleFunc("/courses/{id}", updateCourse).Methods("POST")
 	router.HandleFunc("/courses/{id}", deleteCourse).Methods("DELETE")
 
+	// Route for 404
+	router.NotFoundHandler = http.HandlerFunc(notFoundPage)
+
 	// Start server
 	log.Fatal(http.ListenAndServe(":8000", router))
 }
@@ -141,7 +144,27 @@ func generateRandomStringOfLength(prefix string, length int) string {
 
 // Controllers; TODO: Move in separate file
 
-// home route
+func notFoundPage(w http.ResponseWriter, r *http.Request) {
+	/*
+		404 route
+
+		Params:
+			w: http.ResponseWriter
+			r: *http.Request
+
+		Returns:
+			nil
+	*/
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNotFound)
+	urlNotFoundResponse := ErrorResponse{
+		Error:   http.StatusNotFound,
+		Message: "Url not found",
+		Detail:  "Url not found",
+	}
+	json.NewEncoder(w).Encode(urlNotFoundResponse)
+}
+
 func homePage(w http.ResponseWriter, r *http.Request) {
 	/*
 		Home route
