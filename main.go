@@ -92,6 +92,8 @@ func main() {
 	router.HandleFunc("/courses", getCourses).Methods("GET")
 	router.HandleFunc("/courses/{id}", getCourse).Methods("GET")
 	router.HandleFunc("/courses", createCourse).Methods("POST")
+	router.HandleFunc("/courses/{id}", deleteCourse).Methods("DELETE")
+	router.HandleFunc("/courses/{id}", updateCourse).Methods("POST")
 
 	// Start server
 	log.Fatal(http.ListenAndServe(":8000", router))
@@ -200,6 +202,7 @@ func getCourse(w http.ResponseWriter, r *http.Request) {
 		if course.Id == params["id"] {
 			err := json.NewEncoder(w).Encode(course)
 			RaiseError(err, w)
+			return
 		}
 	}
 	// If not found
@@ -259,4 +262,107 @@ func createCourse(w http.ResponseWriter, r *http.Request) {
 	courses = append(courses, course)
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(course)
+}
+
+func deleteCourse(w http.ResponseWriter, r *http.Request) {
+	/*
+		Delete a course
+
+		Params:
+			w: http.ResponseWriter
+			r: *http.Request
+		Returns:
+			nil
+	*/
+	// Get Id from url
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+
+	id := params["id"]
+
+	if id == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		emptyBodyResponse := ErrorResponse{
+			Error:   http.StatusBadRequest,
+			Message: "Empty id",
+			Detail:  "Provide id in url",
+		}
+		json.NewEncoder(w).Encode(emptyBodyResponse)
+		return
+	}
+
+	for index, course := range courses {
+		if course.Id == id {
+			// Storing course to return
+			course = courses[index]
+			// Remove course from slice
+			courses = append(courses[:index], courses[index+1:]...)
+			json.NewEncoder(w).Encode(course)
+			return
+		}
+	}
+
+	// If not found
+	notFoundResponse := ErrorResponse{
+		Error:   http.StatusNotFound,
+		Message: "Course not found",
+		Detail:  "Course with given id not found",
+	}
+	w.WriteHeader(http.StatusNotFound)
+	json.NewEncoder(w).Encode(notFoundResponse)
+}
+
+func updateCourse(w http.ResponseWriter, r *http.Request) {
+	/*
+		Update a course
+		Not using patch because we are updating whole course
+		Body should contain details we want to update except id which is in url
+		Can also get all items in body and update course includindg id
+
+		Params:
+			w: http.ResponseWriter
+			r: *http.Request
+		Returns:
+			nil
+	*/
+	// Get Id from url
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+
+	id := params["id"]
+
+	if id == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		emptyBodyResponse := ErrorResponse{
+			Error:   http.StatusBadRequest,
+			Message: "Empty id",
+			Detail:  "Provide id in url to update course",
+		}
+		json.NewEncoder(w).Encode(emptyBodyResponse)
+		return
+	}
+
+	for index, course := range courses {
+		if course.Id == id {
+			course := courses[index]
+			// Remove course from slice
+			courses = append(courses[:index], courses[index+1:]...)
+			// Decode json body
+			err := json.NewDecoder(r.Body).Decode(&course)
+			RaiseError(err, w)
+			// Set id to old course id since this is update
+			course.Id = id
+			courses = append(courses, course)
+			json.NewEncoder(w).Encode(course)
+			return
+		}
+	}
+	// If not found
+	notFoundResponse := ErrorResponse{
+		Error:   http.StatusNotFound,
+		Message: "Course not found",
+		Detail:  "Course with given id not found",
+	}
+	w.WriteHeader(http.StatusNotFound)
+	json.NewEncoder(w).Encode(notFoundResponse)
 }
