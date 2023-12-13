@@ -92,8 +92,8 @@ func main() {
 	router.HandleFunc("/courses", getCourses).Methods("GET")
 	router.HandleFunc("/courses/{id}", getCourse).Methods("GET")
 	router.HandleFunc("/courses", createCourse).Methods("POST")
-	router.HandleFunc("/courses/{id}", deleteCourse).Methods("DELETE")
 	router.HandleFunc("/courses/{id}", updateCourse).Methods("POST")
+	router.HandleFunc("/courses/{id}", deleteCourse).Methods("DELETE")
 
 	// Start server
 	log.Fatal(http.ListenAndServe(":8000", router))
