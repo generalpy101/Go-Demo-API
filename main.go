@@ -3,15 +3,24 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"math/rand"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/mux"
 )
 
-const NotFoundJSONReponse = `{
-	"error": 404,
-	"message": "Not found"
-}`
+const CourseIdLength = 10
+const CourseIdPrefix = "co"
+
+const IdCharset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+// Error response struct
+type ErrorResponse struct {
+	Error   int    `json:"error"`
+	Message string `json:"message"`
+	Detail  string `json:"detail"`
+}
 
 // Model for course and author
 // TODO: Move in separate file
@@ -42,10 +51,14 @@ func (c *Course) IsEmpty() bool {
 		Params:
 			c: *Course
 	*/
-	if c.Id == "" && c.Name == "" {
-		return true
-	}
-	return false
+	return c.Name == ""
+}
+
+func (c *Course) GenerateId() {
+	/*
+		Generates and sets id for a course
+	*/
+	c.Id = generateRandomStringOfLength(CourseIdPrefix, CourseIdLength)
 }
 
 func main() {
@@ -78,19 +91,50 @@ func main() {
 	router.HandleFunc("/", homePage).Methods("GET")
 	router.HandleFunc("/courses", getCourses).Methods("GET")
 	router.HandleFunc("/courses/{id}", getCourse).Methods("GET")
+	router.HandleFunc("/courses", createCourse).Methods("POST")
 
 	// Start server
 	log.Fatal(http.ListenAndServe(":8000", router))
 }
 
 // Utils
-func raiseError(err error) {
+func RaiseError(err error, w http.ResponseWriter) {
 	/*
 		Raises error
 	*/
 	if err != nil {
+		// Send internal server error
+		internalServerError := ErrorResponse{
+			Error:   http.StatusInternalServerError,
+			Message: "Internal server error",
+			Detail:  "Something went wrong, server is shutting down",
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(internalServerError)
 		panic(err)
 	}
+}
+
+func generateRandomStringOfLength(prefix string, length int) string {
+	/*
+		Generates random string of given length
+
+		Params:
+			prefix: string
+			length: string
+		Returns:
+			string
+	*/
+	randomString := strings.Builder{}
+
+	randomString.WriteString(prefix)
+
+	for i := 0; i < length; i++ {
+		// Get random index from charset
+		randomString.WriteByte(IdCharset[rand.Intn(len(IdCharset))])
+	}
+
+	return randomString.String()
 }
 
 // Controllers; TODO: Move in separate file
@@ -135,7 +179,7 @@ func getCourses(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	// NewEncoder returns a new encoder that writes to w
 	err := json.NewEncoder(w).Encode(courses)
-	raiseError(err)
+	RaiseError(err, w)
 }
 
 func getCourse(w http.ResponseWriter, r *http.Request) {
@@ -155,10 +199,64 @@ func getCourse(w http.ResponseWriter, r *http.Request) {
 	for _, course := range courses {
 		if course.Id == params["id"] {
 			err := json.NewEncoder(w).Encode(course)
-			raiseError(err)
+			RaiseError(err, w)
 		}
 	}
 	// If not found
+	notFoundResponse := ErrorResponse{
+		Error:   http.StatusNotFound,
+		Message: "Course not found",
+		Detail:  "Course with given id not found",
+	}
 	w.WriteHeader(http.StatusNotFound)
-	w.Write([]byte(NotFoundJSONReponse))
+	json.NewEncoder(w).Encode(notFoundResponse)
+}
+
+func createCourse(w http.ResponseWriter, r *http.Request) {
+	/*
+		Create a course
+
+		Params:
+			w: http.ResponseWriter
+			r: *http.Request
+		Returns:
+			nil
+	*/
+	// Empty body
+	w.Header().Set("Content-Type", "application/json")
+	if r.Body == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		emptyBodyResponse := ErrorResponse{
+			Error:   http.StatusBadRequest,
+			Message: "Empty body",
+			Detail:  "Provide body with course details in json",
+		}
+		json.NewEncoder(w).Encode(emptyBodyResponse)
+		return
+	}
+
+	// Init course
+	var course Course
+
+	// Decode json body
+	err := json.NewDecoder(r.Body).Decode(&course)
+	RaiseError(err, w)
+
+	if course.IsEmpty() {
+		w.WriteHeader(http.StatusBadRequest)
+		emptyBodyResponse := ErrorResponse{
+			Error:   http.StatusBadRequest,
+			Message: "Empty body",
+			Detail:  "Course name and id are mandatory",
+		}
+		json.NewEncoder(w).Encode(emptyBodyResponse)
+		return
+	}
+
+	// Generate id
+	course.GenerateId()
+
+	courses = append(courses, course)
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(course)
 }
